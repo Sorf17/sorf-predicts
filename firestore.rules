@@ -1,0 +1,98 @@
+/**
+ * Firestore Security Rules for LoL Predict
+ *
+ * Core Philosophy:
+ * This ruleset implements a hybrid security model combining strict User Ownership with 
+ * Database-Based Access Control (DBAC) for administrative privileges.
+ */
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Helper Functions ---
+
+    /** Checks if the user is authenticated with Firebase Auth. */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /** 
+     * Checks if the authenticated user has an entry in the roles_admin collection 
+     * or is the bootstrap admin email.
+     */
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid)) ||
+        request.auth.token.email == "sorf17@mail.ru"
+      );
+    }
+
+    /** Checks if the authenticated user's UID matches the provided userId. */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // --- Collection Rules ---
+
+    /** User profiles and nested predictions */
+    match /users/{userId} {
+      allow get, list: if isSignedIn();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+      
+      match /predictions/{predictionId} {
+        allow get, list: if isSignedIn();
+        allow create: if isOwner(userId);
+        allow update, delete: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    /** Administrative roles sentinel */
+    match /roles_admin/{userId} {
+      allow get: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    /** Teams collection */
+    match /teams/{teamId} {
+      allow get, list: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    /** Seasons and nested matches (per backend.json) */
+    match /seasons/{seasonId} {
+      allow get, list: if isSignedIn();
+      allow write: if isAdmin();
+      
+      match /matches/{matchId} {
+        allow get, list: if isSignedIn();
+        allow write: if isAdmin();
+      }
+    }
+
+    /** Top-level Leagues (as used in admin code) */
+    match /leagues/{leagueId} {
+      allow get, list: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    /** Top-level Matches (as used in admin code) */
+    match /matches/{matchId} {
+      allow get, list: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    /** Global Settings (e.g., scoring) */
+    match /settings/{settingId} {
+      allow get: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
+    /** Global Predictions (for ranking collection group queries) */
+    match /{path=**}/predictions/{predictionId} {
+      allow read: if isSignedIn();
+    }
+  }
+}

@@ -1,0 +1,12 @@
+
+kind: "AppHostingConfig"
+schemaVersion: "v1"
+
+runConfig:
+  maxInstances: 2
+  minInstances: 0
+
+env:
+  - variable: NEXT_PUBLIC_ADMIN_EMAIL
+    value: "sorf17@mail.ru"
+    availability: ["BUILD", "RUNTIME"]
